@@ -1,3 +1,5 @@
+Fork to fix warnings and change in location of glib.
+
 # dtreetrawl
 
 `dtreetrawl` trawls/traverses directory tree or file path to collect stats of every entry in the tree.
