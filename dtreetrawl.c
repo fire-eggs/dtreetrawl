@@ -584,7 +584,8 @@ int dtree_check(const char *path, const struct stat *sbuf, int type,
 	case FTW_DNR:
 	case FTW_NS:
 		fprintf(stderr, "Could not read from path %s\n", path);
-		return FTW_STOP;
+    return FTW_CONTINUE; // KBR
+		//return FTW_STOP;
 	case FTW_D:
 	case FTW_F:
 	case FTW_SL: {
