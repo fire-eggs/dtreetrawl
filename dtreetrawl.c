@@ -418,7 +418,8 @@ gchar *get_file_checksum(const char *file_path, GChecksumType checksum_type_g)
 		return NULL;
 	}
 
-	while (pread(rfd, NULL, (size_t) 1, lseek(rfd, 0, SEEK_CUR))) {
+	// KBR while (pread(rfd, NULL, (size_t) 1, lseek(rfd, 0, SEEK_CUR))) {
+	while (pread(rfd, NULL, (size_t) 0, lseek(rfd, 0, SEEK_CUR))) {
 		if ((snr = read(rfd, &rbuf, (ssize_t) 4096)) != -1) {
 			if (snr == 0) {
 				break;
