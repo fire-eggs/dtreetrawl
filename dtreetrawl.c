@@ -16,6 +16,8 @@
 
 #include "dtreetrawl.h"
 
+// KBR
+#define UNUSED(x) (void)(x)
 
 char *ROOT_PATH			= NULL;
 struct dtreestat *DSTAT		= NULL;
@@ -457,11 +459,13 @@ int append_to_hash_dump(GSequence *seq, const char *hashstr)
 
 void update_root_checksum_for_each(char *hashstr, gpointer *user_data)
 {
+  UNUSED(user_data); // KBR
 	update_root_checksum((guchar *)hashstr);
 }
 
 int sequence_compare_data_g(gpointer a, gpointer b, gpointer *user_data)
 {
+  UNUSED(user_data); // KBR
 	return strcmp((char *)a, (char *)b);
 }
 
