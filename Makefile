@@ -1,8 +1,8 @@
 CC = gcc
-CFLAGS = -g -O3 -I./ \
+
+CFLAGS = -O3 -I./ \
 	 -Wall \
 	 -Wextra \
-	 -Wno-unused-parameter \
 	 $(shell pkg-config --cflags glib-2.0)
 LDFLAGS = $(shell pkg-config --libs glib-2.0)
 
@@ -15,7 +15,7 @@ OBJS = $(SRCS:.c=.o)
 all : $(PROG)
 
 $(PROG) : $(OBJS)
-	$(CC) $(CFLAGS) $(LDFLAGS) $(OBJS) -o $(PROG)
+	$(CC) $(CFLAGS) $(OBJS) -o $(PROG) $(LDFLAGS)
 
 dtreetrawl.o : dtreetrawl.c dtreetrawl.h
 

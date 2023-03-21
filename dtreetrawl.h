@@ -3,6 +3,11 @@
 
 #include <glib.h>
 #include <time.h>
+
+// KBR
+#ifndef __USE_XOPEN_EXTENDED
+#define __USE_XOPEN_EXTENDED
+#endif
 #include <ftw.h>
 
 
