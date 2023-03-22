@@ -1,5 +1,7 @@
 Fork to fix warnings and change in location of glib.
 
+In this branch, calculating per-directory stats such as # files, total file sizes, total block sizes.
+
 # dtreetrawl
 
 `dtreetrawl` trawls/traverses directory tree or file path to collect stats of every entry in the tree.
