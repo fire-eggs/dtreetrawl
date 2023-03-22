@@ -39,6 +39,22 @@ GChecksumType CHECKSUM_G;
 GChecksum *ROOT_CKSUM_G		= NULL;
 GSequence *all_hash_dump_g 	= NULL;
 
+GQueue *directoryStack;
+GQueue *directoryList;
+
+struct dirEntry
+{
+  GString *path;
+  unsigned nEntry;
+  unsigned seen;
+  unsigned long long nSizeLocal;
+  unsigned long long nBlocksLocal;
+  unsigned fileCount;
+  unsigned level;
+};
+
+struct dirEntry *currentDirEntry;
+
 
 char *time_t_to_utc(time_t st_time)
 {
@@ -499,6 +515,28 @@ int action_trawlent(struct trawlent *tent)
 			free(entrylist[nentry]);
 		free(entrylist);
 
+    currentDirEntry->seen++;
+    
+    struct dirEntry *newDirectory = malloc(sizeof(struct dirEntry));
+    newDirectory->nEntry = tent->ndirent - 2 ;
+    newDirectory->path = g_string_new(tent->path);
+    newDirectory->seen = 0;
+    newDirectory->fileCount = 0;
+    newDirectory->nSizeLocal = 0;
+    newDirectory->nBlocksLocal = 0;
+    newDirectory->level = tent->level;
+    
+    // entering a new directory
+    g_queue_push_tail(directoryList, newDirectory);
+    
+    // directory push/pop logic falls over with an empty directory
+    if (newDirectory->nEntry > 0)
+    {
+      g_queue_push_tail(directoryStack, currentDirEntry);
+      currentDirEntry = newDirectory;
+    }
+    
+
 	} else if (S_ISREG(tent->tstat->st_mode)) {
 		DSTAT->nreg += 1;
 		tent->ndirent = 0;
@@ -512,6 +550,15 @@ int action_trawlent(struct trawlent *tent)
 			}
 		}
 		tent->hash = cksum;
+ 
+    while (currentDirEntry->level != 0 && currentDirEntry->seen == currentDirEntry->nEntry)
+      currentDirEntry = g_queue_pop_tail(directoryStack);
+      
+    // Add to directory count
+    currentDirEntry->seen++;
+    currentDirEntry->nSizeLocal += tent->tstat->st_size;
+    currentDirEntry->nBlocksLocal += 512 * tent->tstat->st_blocks;
+    currentDirEntry->fileCount++;
 
 	} else if (S_ISLNK(tent->tstat->st_mode)) {
 		DSTAT->nlnk += 1;
@@ -658,6 +705,19 @@ int dtree_check(const char *path, const struct stat *sbuf, int type,
 
 }
 
+void dirdump(gpointer item, gpointer prefix)
+{
+  UNUSED(prefix);
+  
+  struct dirEntry *de = item;
+  if (!de || !de->path)
+    return;
+  double effi = 0;
+  if (de->nBlocksLocal)  // division by 0
+    effi = ((double)de->nSizeLocal / de->nBlocksLocal) * 100.0;
+  printf("%3d | %3d | %11llu | %11llu | %6.3g%% | %s \n", de->level, de->fileCount, de->nSizeLocal, de->nBlocksLocal, effi, de->path->str);
+}
+
 int main(int argc, char *argv[])
 {
 	GTimer *timer_g		= NULL;
@@ -770,6 +830,21 @@ int main(int argc, char *argv[])
 			exit(EXIT_FAILURE);
 		}
 
+    struct dirEntry *rootDir = malloc(sizeof(struct dirEntry));
+    //strcpy(rootDir->path, "<root>");
+    rootDir->path = g_string_new("<root>");
+    rootDir->seen = 0;
+    rootDir->fileCount = 0;
+    rootDir->nEntry = -1; // TODO scandir?
+    rootDir->nBlocksLocal = 0;
+    rootDir->nSizeLocal = 0;
+    rootDir->level = 0;
+    
+    currentDirEntry = rootDir;
+    directoryStack = g_queue_new();
+    directoryList  = g_queue_new();
+    g_queue_push_tail(directoryList, rootDir);
+
 		timer_g = g_timer_new();
 		gdt = g_date_time_new_now_utc();
 		now_utc = g_date_time_format(gdt, "%s");
@@ -837,6 +912,13 @@ int main(int argc, char *argv[])
 		} else {
 			fprintf(stdout, "%s\n", (char *) root_hash_str ? (char *) root_hash_str : "");
 		}
+
+    printf("%d\n", directoryList->length);
+    g_queue_foreach(directoryList, dirdump, NULL);
+
+    g_queue_free(directoryList);  // TODO free contents
+    g_queue_free(directoryStack);
+
 		g_free(root_hash_str);
 		g_free(now_local);
 		g_free(now_utc);
