@@ -51,10 +51,24 @@ struct dirEntry
   unsigned long long nBlocksLocal;
   unsigned fileCount;
   unsigned level;
+  struct dirEntry *parent;
+  
+  unsigned long long sizeCum;
+  unsigned long long blockCum;
+  unsigned countCum;  
+  
+  unsigned blockCount;
+  unsigned blockCountCum;
 };
 
 struct dirEntry *currentDirEntry;
 
+struct dirEntry *newDirEntry()
+{
+    struct dirEntry *newDirectory = malloc(sizeof(struct dirEntry));
+    memset(newDirectory, 0, sizeof(struct dirEntry));    
+    return newDirectory;
+}
 
 char *time_t_to_utc(time_t st_time)
 {
@@ -486,6 +500,34 @@ int sequence_compare_data_g(gpointer a, gpointer b, gpointer *user_data)
 	return strcmp((char *)a, (char *)b);
 }
 
+void accumulate()
+{
+    struct dirEntry *dad = currentDirEntry->parent;
+#if 0    
+    int test = g_queue_index(directoryList, dad);
+    if (test == 8)
+      printf("accumulating into |%s| from |%s|\n", dad->path->str, currentDirEntry->path->str);
+#endif
+    
+#if 0    
+    dad->sizeCum += currentDirEntry->nSizeLocal;
+    dad->blockCum+= currentDirEntry->nBlocksLocal;
+    dad->countCum+= currentDirEntry->fileCount;
+    dad->blockCountCum += currentDirEntry->blockCount;
+#endif
+    currentDirEntry->sizeCum += currentDirEntry->nSizeLocal;
+    currentDirEntry->blockCum+= currentDirEntry->nBlocksLocal;
+    currentDirEntry->countCum+= currentDirEntry->fileCount;  
+    currentDirEntry->blockCountCum += currentDirEntry->blockCount;
+    
+    dad->sizeCum += currentDirEntry->sizeCum;
+    dad->blockCum+= currentDirEntry->blockCum;
+    dad->countCum+= currentDirEntry->countCum;
+    dad->blockCountCum += currentDirEntry->blockCountCum;
+
+}
+
+
 int action_trawlent(struct trawlent *tent)
 {
 	if (S_ISDIR(tent->tstat->st_mode)) {
@@ -517,7 +559,7 @@ int action_trawlent(struct trawlent *tent)
 
     currentDirEntry->seen++;
     
-    struct dirEntry *newDirectory = malloc(sizeof(struct dirEntry));
+    struct dirEntry *newDirectory = newDirEntry();
     newDirectory->nEntry = tent->ndirent - 2 ;
     newDirectory->path = g_string_new(tent->path);
     newDirectory->seen = 0;
@@ -526,6 +568,17 @@ int action_trawlent(struct trawlent *tent)
     newDirectory->nBlocksLocal = 0;
     newDirectory->level = tent->level;
     
+    // This new directory may be subordinate, may be a peer, may be superior
+    struct dirEntry *temp = currentDirEntry;
+    while (temp->level >= newDirectory->level)
+        temp = temp->parent;
+    newDirectory->parent = temp;
+#if 0    
+    newDirectory->parent = currentDirEntry; 
+    if (newDirectory->level == currentDirEntry->level)
+        newDirectory->parent = currentDirEntry->parent;
+#endif    
+
     // entering a new directory
     g_queue_push_tail(directoryList, newDirectory);
     
@@ -535,7 +588,6 @@ int action_trawlent(struct trawlent *tent)
       g_queue_push_tail(directoryStack, currentDirEntry);
       currentDirEntry = newDirectory;
     }
-    
 
 	} else if (S_ISREG(tent->tstat->st_mode)) {
 		DSTAT->nreg += 1;
@@ -552,14 +604,37 @@ int action_trawlent(struct trawlent *tent)
 		tent->hash = cksum;
  
     while (currentDirEntry->level != 0 && currentDirEntry->seen == currentDirEntry->nEntry)
+    {
+      accumulate();
       currentDirEntry = g_queue_pop_tail(directoryStack);
+    } 
+
+    while (currentDirEntry->level >= tent->level)
+    {
+      accumulate();
+      currentDirEntry = g_queue_pop_tail(directoryStack);
+    }
+
+#if 0    
+    int test = g_queue_index(directoryList, currentDirEntry);
+    if (test == 5)
+      printf("Adding file |%s| to |%s|\n", tent->path, currentDirEntry->path->str);
+#endif
       
     // Add to directory count
     currentDirEntry->seen++;
     currentDirEntry->nSizeLocal += tent->tstat->st_size;
+    // NOTE: div by 2 makes the block count "match" that of "ls -s". "match" quoted because not taking directory size into account.
+    currentDirEntry->blockCount += tent->tstat->st_blocks / 2;
     currentDirEntry->nBlocksLocal += 512 * tent->tstat->st_blocks;
     currentDirEntry->fileCount++;
 
+    while (currentDirEntry->level != 0 && currentDirEntry->seen == currentDirEntry->nEntry)
+    {
+      accumulate(1);
+      currentDirEntry = g_queue_pop_tail(directoryStack);
+    } 
+    
 	} else if (S_ISLNK(tent->tstat->st_mode)) {
 		DSTAT->nlnk += 1;
 		tent->ndirent = 0;
@@ -705,6 +780,7 @@ int dtree_check(const char *path, const struct stat *sbuf, int type,
 
 }
 
+int dumpCounter;
 void dirdump(gpointer item, gpointer prefix)
 {
   UNUSED(prefix);
@@ -715,7 +791,15 @@ void dirdump(gpointer item, gpointer prefix)
   double effi = 0;
   if (de->nBlocksLocal)  // division by 0
     effi = ((double)de->nSizeLocal / de->nBlocksLocal) * 100.0;
-  printf("%3d | %3d | %11llu | %11llu | %6.3g%% | %s \n", de->level, de->fileCount, de->nSizeLocal, de->nBlocksLocal, effi, de->path->str);
+  double cumEffi = 0;
+  if (de->blockCum)
+    cumEffi = ((double)de->sizeCum / de->blockCum) * 100.0;
+  printf("%4d | %3d | %3d | %11llu | %6d | %6.3g%% | %s \n", dumpCounter++, de->level, de->fileCount, de->nSizeLocal, de->blockCount, effi, de->path->str);
+  printf("           | %3d | %11llu | %6d | %6.3g%% \n", de->countCum, de->sizeCum, de->blockCountCum, cumEffi);
+#if 0  
+  if (de->parent)
+    printf("                                                  | %s \n", de->parent->path->str);
+#endif
 }
 
 int main(int argc, char *argv[])
@@ -830,15 +914,9 @@ int main(int argc, char *argv[])
 			exit(EXIT_FAILURE);
 		}
 
-    struct dirEntry *rootDir = malloc(sizeof(struct dirEntry));
-    //strcpy(rootDir->path, "<root>");
+    struct dirEntry *rootDir = newDirEntry();
     rootDir->path = g_string_new("<root>");
-    rootDir->seen = 0;
-    rootDir->fileCount = 0;
     rootDir->nEntry = -1; // TODO scandir?
-    rootDir->nBlocksLocal = 0;
-    rootDir->nSizeLocal = 0;
-    rootDir->level = 0;
     
     currentDirEntry = rootDir;
     directoryStack = g_queue_new();
@@ -912,8 +990,50 @@ int main(int argc, char *argv[])
 		} else {
 			fprintf(stdout, "%s\n", (char *) root_hash_str ? (char *) root_hash_str : "");
 		}
+#if 0
+    struct dirEntry *temp = g_queue_peek_tail(directoryList);
+    printf("final\n");
+    //printf("last: %s %lld\n", currentDirEntry->path->str, currentDirEntry->nSizeLocal);
+    //printf("current parent: %s\n", currentDirEntry->parent->path->str);
+    printf("last: %s %lld\n", temp->path->str, temp->nSizeLocal);
+    printf("last parent: %s\n", temp->parent->path->str);
+#endif
+#if 0
+    struct dirEntry *temp = g_queue_peek_nth(directoryList, 5);
+    printf("before final accumulation\n");
+    printf("5th: %s %lld %lld\n", temp->path->str, temp->nSizeLocal, temp->sizeCum);
+#endif    
+
+    while (g_queue_get_length(directoryStack))
+    {
+      struct dirEntry *dad = currentDirEntry->parent;
+      
+      currentDirEntry->sizeCum += currentDirEntry->nSizeLocal;
+      currentDirEntry->blockCum+= currentDirEntry->nBlocksLocal;
+      currentDirEntry->countCum+= currentDirEntry->fileCount; 
+      currentDirEntry->blockCountCum += currentDirEntry->blockCount;
+       
+      dad->countCum += currentDirEntry->countCum;
+      dad->blockCum += currentDirEntry->blockCum;
+      dad->sizeCum  += currentDirEntry->sizeCum;
+      dad->blockCountCum += currentDirEntry->blockCountCum;
+        
+      currentDirEntry = g_queue_pop_tail(directoryStack);
+    } 
+#if 0    
+    currentDirEntry->sizeCum += currentDirEntry->nSizeLocal;
+    currentDirEntry->blockCum+= currentDirEntry->nBlocksLocal;
+    currentDirEntry->countCum+= currentDirEntry->fileCount;  
+    currentDirEntry->blockCountCum += currentDirEntry->blockCount;
+#endif    
+    rootDir->sizeCum += rootDir->nSizeLocal;
+    rootDir->blockCum+= rootDir->nBlocksLocal;
+    rootDir->countCum+= rootDir->fileCount;  
+    rootDir->blockCountCum += rootDir->blockCount;
 
     printf("%d\n", directoryList->length);
+    printf(" # | Lvl | Count | Bytes | Blocks | Efficiency | Path\n");
+    dumpCounter = 0;
     g_queue_foreach(directoryList, dirdump, NULL);
 
     g_queue_free(directoryList);  // TODO free contents
