@@ -558,14 +558,11 @@ int action_trawlent(struct trawlent *tent)
 		free(entrylist);
 
     currentDirEntry->seen++;
+    // TODO add 4096 to currentDirEntry->nSizeLocal
     
     struct dirEntry *newDirectory = newDirEntry();
     newDirectory->nEntry = tent->ndirent - 2 ;
     newDirectory->path = g_string_new(tent->path);
-    newDirectory->seen = 0;
-    newDirectory->fileCount = 0;
-    newDirectory->nSizeLocal = 0;
-    newDirectory->nBlocksLocal = 0;
     newDirectory->level = tent->level;
     
     // This new directory may be subordinate, may be a peer, may be superior
