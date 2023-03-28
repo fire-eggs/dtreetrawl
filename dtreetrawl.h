@@ -12,6 +12,7 @@
 
 
 extern gint MAX_LEVEL;
+extern gint OUT_LEVEL;
 extern gchar *DELIM;
 extern gchar *HASH_TYPE;
 extern gboolean IS_FOLLOW_SYMLINK;

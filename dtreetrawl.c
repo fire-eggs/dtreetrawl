@@ -20,10 +20,11 @@
 #define UNUSED(x) (void)(x)
 
 char *ROOT_PATH			= NULL;
-struct dtreestat *DSTAT		= NULL;
+struct dtreestat *DSTAT	= NULL;
 gchar *DELIM			= NULL;
 gchar *HASH_TYPE		= NULL;
 gint MAX_LEVEL 			= -1;
+gint OUT_LEVEL          = -1;
 gboolean IS_FOLLOW_SYMLINK	= FALSE;
 gboolean IS_NO_TENT		= FALSE;
 gboolean IS_PRINT_ONLY_ROOT_HASH= FALSE;
@@ -783,7 +784,7 @@ void dirdump(gpointer item, gpointer prefix)
   UNUSED(prefix);
   
   struct dirEntry *de = item;
-  if (!de || !de->path)
+  if (!de || !de->path || (OUT_LEVEL != -1 && (gint)de->level > OUT_LEVEL))
     return;
   double effi = 0;
   if (de->nBlocksLocal)  // division by 0
@@ -823,6 +824,7 @@ int main(int argc, char *argv[])
 		{ "no-content-hash", 'F', 0, G_OPTION_ARG_NONE, &IS_HASH_EXCLUDE_CONTENT, "Do not hash the contents of the file", NULL },
 		{ "hash-symlink", 's', 0, G_OPTION_ARG_NONE, &IS_HASH_SYMLINK, "Include symbolic links' referent name while calculating the root checksum", NULL },
 		{ "hash-dirent", 'e', 0, G_OPTION_ARG_NONE, &IS_HASH_DIRENT, "Include hash of directory entries while calculating root checksum", NULL },
+		{ "out-level", 0, 0, G_OPTION_ARG_INT, &OUT_LEVEL, "Only output rollup to this level", NULL },
 		{ NULL }
 	};
 
